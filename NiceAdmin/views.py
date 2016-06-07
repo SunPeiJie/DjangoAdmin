@@ -6,7 +6,6 @@ redisServer =  redis.StrictRedis(host='192.168.10.251', port=6379)
 
 from django.contrib import auth
 from django.contrib.auth.decorators import user_passes_test, login_required
-
 from django.shortcuts import render
 from django.http.response import HttpResponse
 from django.http import HttpResponseRedirect
@@ -15,7 +14,6 @@ from django.contrib.auth.models import User
 import json
 #导入包装的csrf请求，对跨站攻击脚本做处理
 from django.views.decorators.csrf import csrf_exempt
-
 import time
 
 @login_required(login_url="/login/")
@@ -27,24 +25,31 @@ def index(request):
         lastindex = postdata.get('lastindex')
         data ={}
         if msg:
-            lsize = redisServer.llen('index_chatdata')
+            #lsize = redisServer.llen('index_chatdata')
             user = request.user.username
             data['username'] = user
             data['message'] = msg
-            data['id'] = lsize
             data['time'] = time.asctime()
-            print data
-            print json.dumps(data)
-            redisServer.rpush('index_chatdata',json.dumps(data))
+            #print json.dumps(data)
+            lsize = redisServer.rpush('index_chatdata',json.dumps(data))
+            data['id'] = str(lsize)
             return HttpResponse(json.dumps(data))
         if lastindex:
+            lastindex = int(lastindex)
+            lsize = redisServer.llen('index_chatdata')
             datalist =[]
-            if int(lastindex) ==( redisServer.llen('index_chatdata') -1):
+            if lastindex ==lsize -1:
                 return HttpResponse(json.dumps(data))
-            data = redisServer.lrange('index_chatdata',int(lastindex)+1,-1)
-            print data
+            if lastindex < 0:
+                data = redisServer.lrange('index_chatdata',lsize-10,lsize)
+                lastindex = lsize - 10
+            else:
+                data = redisServer.lrange('index_chatdata',lastindex,lsize)
             for d in data:
-                datalist.append(json.loads(d))
+                data_dict =json.loads(d)
+                data_dict['id'] = str(lastindex)
+                lastindex = lastindex+1
+                datalist.append(data_dict)
             return HttpResponse(json.dumps(datalist))
         return HttpResponse(json.dumps(data))
     return render(
